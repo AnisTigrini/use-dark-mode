@@ -1,19 +1,23 @@
 {
-  "name": "use-dark-mode",
+  "name": "use-dark-mode-v2",
   "publishConfig": {
     "tag": "latest"
   },
-  "version": "2.3.2",
+  "version": "1.0.0",
   "description": "A custom React Hook to help you implement a \"dark mode\" component.",
-  "main": "dist/use-dark-mode.js",
-  "umd:main": "dist/use-dark-mode.umd.js",
-  "module": "dist/use-dark-mode.m.js",
+  "main": "dist/use-dark-mode-v2.js",
+  "umd:main": "dist/use-dark-mode-v2.umd.js",
+  "module": "dist/use-dark-mode-v2.m.js",
   "source": "src/index.js",
   "types": "types/index.d.ts",
   "license": "MIT",
   "repository": {
     "type": "git",
-    "url": "https://github.com/donavon/use-dark-mode.git"
+    "url": "https://github.com/AnisTigrini/use-dark-mode.git"
+  },
+  "homepage": "https://anistigrini.github.io/use-dark-mode/",
+  "bugs": {
+    "url": "https://github.com/AnisTigrini/use-dark-mode/issues"
   },
   "scripts": {
     "prepublishOnly": "npm run build",
@@ -32,7 +36,10 @@
     "lib",
     "dark-mode"
   ],
-  "author": "donavon",
+  "author": "Anis Tigrini",
+  "contributors": [
+    "Donavon West (https://github.com/donavon) - original author"
+  ],
   "devDependencies": {
     "@babel/core": "^7.2.2",
     "@babel/preset-env": "^7.2.3",
@@ -51,7 +58,7 @@
     "rimraf": "^2.6.2"
   },
   "peerDependencies": {
-    "react": "^16.8.0"
+    "react": "^16.8.0 || ^17.0.0 || ^18.0.0 || ^19.0.0"
   },
   "jest": {
     "coverageThreshold": {
@@ -64,7 +71,6 @@
     }
   },
   "dependencies": {
-    "@use-it/event-listener": "^0.1.2",
-    "use-persisted-state": "^0.3.0"
+    "use-sync-external-store": "^1.7.0"
   }
 }

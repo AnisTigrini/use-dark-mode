@@ -1,0 +1,782 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>use-dark-mode-v2</title>
+  <meta name="description" content="A React hook for dark mode: persists the user's choice, follows the OS theme, syncs across tabs, and works with server rendering (Next.js). A maintained fork of use-dark-mode.">
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'><circle cx='16' cy='16' r='13' fill='%23f5b301'/><path d='M16 3a13 13 0 0 0 0 26z' fill='%23222'/></svg>">
+  <style>
+    :root {
+      --bg: #ffffff;
+      --fg: #17181c;
+      --muted: #5b6070;
+      --surface: #f6f7f9;
+      --surface-2: #eceef2;
+      --border: #e3e5ea;
+      --accent: #5b4ff5;
+      --accent-fg: #ffffff;
+      --accent-soft: rgba(91, 79, 245, 0.1);
+      --header-bg: rgba(255, 255, 255, 0.82);
+      --code-bg: #f6f7f9;
+      --tok-kw: #7c3aed;
+      --tok-str: #0f7b3f;
+      --tok-com: #868b98;
+      --tok-tag: #c2410c;
+      --logo-gatsby: #663399;
+      --logo-vite: #646cff;
+      --shadow: 0 1px 2px rgba(16, 18, 27, 0.04), 0 8px 24px rgba(16, 18, 27, 0.06);
+    }
+    /* Explicit choice set by the hook (or the no-flash script)… */
+    body.dark-mode {
+      --bg: #0e1014;
+      --fg: #e7e8ec;
+      --muted: #9aa0ae;
+      --surface: #161920;
+      --surface-2: #1f232c;
+      --border: #272b35;
+      --accent: #9a94ff;
+      --accent-fg: #0e1014;
+      --accent-soft: rgba(154, 148, 255, 0.14);
+      --header-bg: rgba(14, 16, 20, 0.82);
+      --code-bg: #13161c;
+      --tok-kw: #c4a7ff;
+      --tok-str: #7ee2a8;
+      --tok-com: #6f7685;
+      --tok-tag: #ffab70;
+      --logo-gatsby: #b48ae6;
+      --logo-vite: #8f95ff;
+      --shadow: 0 1px 2px rgba(0, 0, 0, 0.3), 0 8px 24px rgba(0, 0, 0, 0.3);
+    }
+    /* …otherwise follow the OS (also covers visitors without JavaScript). */
+    @media (prefers-color-scheme: dark) {
+      body:not(.light-mode) {
+        --bg: #0e1014;
+        --fg: #e7e8ec;
+        --muted: #9aa0ae;
+        --surface: #161920;
+        --surface-2: #1f232c;
+        --border: #272b35;
+        --accent: #9a94ff;
+        --accent-fg: #0e1014;
+        --accent-soft: rgba(154, 148, 255, 0.14);
+        --header-bg: rgba(14, 16, 20, 0.82);
+        --code-bg: #13161c;
+        --tok-kw: #c4a7ff;
+        --tok-str: #7ee2a8;
+        --tok-com: #6f7685;
+        --tok-tag: #ffab70;
+        --logo-gatsby: #b48ae6;
+        --logo-vite: #8f95ff;
+        --shadow: 0 1px 2px rgba(0, 0, 0, 0.3), 0 8px 24px rgba(0, 0, 0, 0.3);
+      }
+    }
+
+    * { box-sizing: border-box; }
+    html { -webkit-text-size-adjust: 100%; scroll-padding-top: 80px; }
+    @media (prefers-reduced-motion: no-preference) { html { scroll-behavior: smooth; } }
+    body {
+      margin: 0;
+      background: var(--bg);
+      color: var(--fg);
+      font: 16px/1.65 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+      transition: background-color 0.25s ease, color 0.25s ease;
+    }
+    a { color: var(--accent); text-underline-offset: 2px; }
+    .wrap { max-width: 1080px; margin: 0 auto; padding: 0 16px; }
+
+    /* Header */
+    header.top {
+      position: sticky; top: 0; z-index: 10;
+      background: var(--header-bg); border-bottom: 1px solid var(--border);
+      -webkit-backdrop-filter: saturate(1.4) blur(10px); backdrop-filter: saturate(1.4) blur(10px);
+    }
+    header.top .wrap { display: flex; align-items: center; gap: 16px; height: 60px; }
+    .brand { display: flex; align-items: center; gap: 10px; font-weight: 700; text-decoration: none; color: var(--fg); margin-right: auto; }
+    .brand svg { flex: none; }
+    header.top nav { display: flex; align-items: center; gap: 18px; font-size: 15px; }
+    header.top nav a { color: var(--muted); text-decoration: none; }
+    header.top nav a:hover { color: var(--fg); }
+    #theme-toggle { width: 36px; height: 36px; flex: none; }
+    .icon-btn {
+      display: grid; place-items: center; width: 36px; height: 36px; padding: 0;
+      border-radius: 8px; border: 1px solid var(--border); background: var(--surface); color: var(--fg);
+    }
+
+    /* Hero */
+    .hero {
+      display: grid; gap: 40px; align-items: center; padding: 64px 0 56px;
+      grid-template-columns: minmax(0, 1.1fr) minmax(0, 1fr);
+    }
+    .eyebrow {
+      display: inline-block; font-size: 13px; font-weight: 600; color: var(--accent);
+      background: var(--accent-soft); padding: 4px 10px; border-radius: 999px; margin-bottom: 16px; text-decoration: none;
+    }
+    .hero h1 { font-size: clamp(34px, 5.4vw, 52px); line-height: 1.08; margin: 0 0 16px; letter-spacing: -0.03em; }
+    .hero h1 span { color: var(--accent); }
+    .hero p.lead { font-size: 18px; color: var(--muted); margin: 0 0 28px; max-width: 52ch; }
+    .install {
+      display: flex; align-items: center; gap: 8px; max-width: 380px;
+      background: var(--code-bg); border: 1px solid var(--border); border-radius: 10px;
+      padding: 6px 6px 6px 16px; font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; font-size: 15px;
+    }
+    .install::before { content: "$"; color: var(--muted); }
+    .install code { flex: 1; background: none; border: 0; padding: 0; font-size: inherit; }
+    .badges { display: flex; flex-wrap: wrap; gap: 8px; margin: 20px 0 0; padding: 0; list-style: none; }
+    .badges li {
+      font-size: 13px; color: var(--muted); border: 1px solid var(--border); border-radius: 999px; padding: 3px 10px;
+    }
+
+    button {
+      font: inherit; font-size: 14px; cursor: pointer;
+      border: 1px solid var(--border); background: var(--surface); color: var(--fg);
+      border-radius: 8px; padding: 6px 12px;
+      transition: border-color 0.15s ease, background-color 0.15s ease;
+    }
+    button:hover { border-color: var(--muted); }
+    button:focus-visible, a:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+
+    /* Demo card */
+    .demo {
+      background: var(--surface); border: 1px solid var(--border); border-radius: 16px;
+      padding: 24px; box-shadow: var(--shadow);
+    }
+    .demo h2 { margin: 0 0 4px; font-size: 16px; letter-spacing: 0; }
+    .demo > p { margin: 0 0 18px; color: var(--muted); font-size: 14px; }
+    .segmented {
+      display: grid; grid-template-columns: repeat(3, 1fr); gap: 4px; padding: 4px;
+      background: var(--surface-2); border-radius: 12px;
+    }
+    .segmented button {
+      display: flex; align-items: center; justify-content: center; gap: 8px;
+      border: 0; background: transparent; color: var(--muted); padding: 10px 8px; border-radius: 9px; font-weight: 500;
+    }
+    .segmented button:hover { color: var(--fg); }
+    .segmented button[aria-pressed="true"] { background: var(--bg); color: var(--fg); box-shadow: var(--shadow); }
+    .readout { margin: 18px 0 0; display: grid; gap: 8px; font-size: 14px; }
+    .readout div { display: flex; justify-content: space-between; gap: 12px; align-items: baseline; }
+    .readout dt { color: var(--muted); }
+    .readout dd { margin: 0; text-align: right; }
+    .demo .hint { margin: 16px 0 0; font-size: 13px; color: var(--muted); }
+    .demo .loading { color: var(--muted); font-size: 14px; margin: 0; }
+
+    /* Layout below the hero */
+    .layout { display: grid; grid-template-columns: 190px minmax(0, 1fr); gap: 56px; border-top: 1px solid var(--border); }
+    .toc { position: sticky; top: 60px; align-self: start; padding: 36px 0; font-size: 14px; }
+    .toc p { margin: 0 0 8px; font-size: 12px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.06em; color: var(--muted); }
+    .toc ul { list-style: none; margin: 0; padding: 0; border-left: 1px solid var(--border); }
+    .toc a { display: block; padding: 5px 0 5px 14px; margin-left: -1px; border-left: 2px solid transparent; color: var(--muted); text-decoration: none; }
+    .toc a:hover { color: var(--fg); }
+    .toc a[aria-current="true"] { color: var(--fg); border-left-color: var(--accent); }
+    main { max-width: 760px; padding-bottom: 24px; }
+
+    main section { padding: 40px 0 8px; }
+    h2 { font-size: 26px; margin: 0 0 14px; letter-spacing: -0.02em; line-height: 1.25; }
+    h3 { font-size: 18px; margin: 28px 0 8px; }
+    p { margin: 0 0 14px; }
+
+    code {
+      font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; font-size: 0.88em;
+      background: var(--code-bg); border: 1px solid var(--border); padding: 1px 5px; border-radius: 5px;
+    }
+    .code { position: relative; margin: 0 0 16px; }
+    pre {
+      margin: 0; background: var(--code-bg); border: 1px solid var(--border); border-radius: 10px;
+      padding: 16px 18px; overflow-x: auto; font-size: 14px; line-height: 1.6;
+    }
+    pre code { background: none; border: 0; padding: 0; font-size: inherit; }
+    .code .copy {
+      position: absolute; top: 8px; right: 8px; font-size: 12px; padding: 3px 9px;
+      opacity: 0; transition: opacity 0.15s ease;
+    }
+    .code:hover .copy, .code .copy:focus-visible { opacity: 1; }
+    @media (hover: none) { .code .copy { opacity: 1; } }
+    .tok-kw { color: var(--tok-kw); }
+    .tok-str { color: var(--tok-str); }
+    .tok-com { color: var(--tok-com); font-style: italic; }
+    .tok-tag { color: var(--tok-tag); }
+
+    .callout {
+      display: flex; gap: 14px; background: var(--accent-soft); border-radius: 12px; padding: 16px 18px; margin-top: 40px;
+    }
+    .callout svg { flex: none; color: var(--accent); margin-top: 3px; }
+    .callout p { margin: 0; }
+
+    .cards { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; margin: 18px 0 0; padding: 0; list-style: none; }
+    .cards li { border: 1px solid var(--border); border-radius: 12px; padding: 16px 18px; background: var(--surface); }
+    .cards h3 { margin: 0 0 6px; font-size: 16px; }
+    .cards p { margin: 0; font-size: 15px; color: var(--muted); }
+    .cards .refs { margin-top: 8px; font-size: 13px; }
+
+    .table-wrap { overflow-x: auto; margin: 0 0 16px; border: 1px solid var(--border); border-radius: 10px; }
+    table { border-collapse: collapse; width: 100%; font-size: 15px; }
+    th, td { text-align: left; vertical-align: top; padding: 10px 14px; border-bottom: 1px solid var(--border); }
+    tr:last-child td { border-bottom: 0; }
+    th { font-size: 12px; text-transform: uppercase; letter-spacing: 0.05em; color: var(--muted); background: var(--surface); }
+    td:first-child { white-space: nowrap; }
+
+    ol.priority { padding-left: 22px; margin: 0 0 16px; }
+    ol.priority li { margin: 4px 0; }
+
+    /* Framework picker: cards acting as tabs (all panels show without JavaScript) */
+    .tabs [role="tablist"] { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 10px; margin: 24px 0 20px; }
+    .tabs [role="tab"] {
+      display: flex; flex-direction: column; align-items: flex-start; gap: 2px; text-align: left;
+      padding: 14px 14px 12px; border: 1px solid var(--border); border-radius: 12px; background: var(--surface); color: var(--fg);
+    }
+    .tabs [role="tab"]:hover { border-color: var(--muted); }
+    .tabs [role="tab"][aria-selected="true"] { border-color: var(--accent); background: var(--accent-soft); box-shadow: inset 0 0 0 1px var(--accent); }
+    .tabs .logos { display: flex; gap: 6px; margin-bottom: 10px; }
+    .tabs .logo { width: 26px; height: 26px; fill: currentColor; }
+    .logo-next { color: var(--fg); }
+    .logo-gatsby { color: var(--logo-gatsby); }
+    .logo-vite { color: var(--logo-vite); }
+    .logo-html { color: #e34f26; }
+    .tab-name { font-weight: 600; font-size: 15px; line-height: 1.3; }
+    .tab-sub { font-size: 13px; color: var(--muted); line-height: 1.3; }
+    .tabs:not(.ready) [role="tablist"] { display: none; }
+    .tabs.ready [role="tabpanel"][hidden] { display: none; }
+    .tabs:not(.ready) [role="tabpanel"] h4 { display: block; }
+    [role="tabpanel"] h4 { display: none; margin: 20px 0 8px; font-size: 16px; }
+
+    footer { border-top: 1px solid var(--border); padding: 28px 0 56px; color: var(--muted); font-size: 14px; }
+    footer p { margin: 0; }
+
+    @media (max-width: 900px) {
+      .hero { grid-template-columns: minmax(0, 1fr); padding: 40px 0; gap: 32px; }
+      .layout { grid-template-columns: minmax(0, 1fr); }
+      .toc { display: none; }
+      main { max-width: none; }
+    }
+    @media (max-width: 600px) {
+      header.top nav .wide { display: none; }
+      header.top nav { gap: 14px; }
+      .cards { grid-template-columns: minmax(0, 1fr); }
+      .tabs [role="tablist"] { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+      .demo { padding: 18px; }
+      h2 { font-size: 23px; }
+    }
+  </style>
+</head>
+<body>
+  <!-- Runs before the page paints, so there's no flash of the wrong theme.
+       Same script as in "Server rendering & preventing the flash" below, with this site's storageKey. -->
+  <script>
+    (function () {
+      var storageKey = 'use-dark-mode-v2-docs';
+      var classNameDark = 'dark-mode';
+      var classNameLight = 'light-mode';
+      var defaultMode = 'system';
+      var dark;
+      try {
+        var stored = localStorage.getItem(storageKey);
+        if (stored !== null) dark = JSON.parse(stored);
+      } catch (e) {}
+      if (typeof dark !== 'boolean') {
+        dark = defaultMode === 'system'
+          ? !!(window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches)
+          : defaultMode === 'dark';
+      }
+      document.body.classList.add(dark ? classNameDark : classNameLight);
+      document.body.classList.remove(dark ? classNameLight : classNameDark);
+    })();
+  </script>
+
+  <header class="top">
+    <div class="wrap">
+      <a class="brand" href="#">
+        <svg width="22" height="22" viewBox="0 0 32 32" aria-hidden="true"><circle cx="16" cy="16" r="13" fill="#f5b301"/><path d="M16 3a13 13 0 0 0 0 26z" fill="currentColor"/></svg>
+        use-dark-mode-v2
+      </a>
+      <nav aria-label="Main">
+        <a class="wide" href="#api">API</a>
+        <a class="wide" href="#flash">SSR</a>
+        <a href="https://www.npmjs.com/package/use-dark-mode-v2">npm</a>
+        <a href="https://github.com/AnisTigrini/use-dark-mode">GitHub</a>
+      </nav>
+      <div id="theme-toggle"></div>
+    </div>
+  </header>
+
+  <div class="wrap">
+    <div class="hero">
+      <div>
+        <a class="eyebrow" href="#fork">Maintained fork of use-dark-mode</a>
+        <h1>Dark mode for React, <span>done right.</span></h1>
+        <p class="lead">
+          A small hook that remembers the user's choice, follows the OS theme until they make one,
+          keeps every component and tab in sync, and works with server rendering.
+        </p>
+        <div class="install">
+          <code id="install-cmd">npm i use-dark-mode-v2</code>
+          <button type="button" id="copy-install">Copy</button>
+        </div>
+        <ul class="badges" aria-label="Highlights">
+          <li>React 16.8 – 19</li>
+          <li>~1 KB gzipped</li>
+          <li>Next.js &amp; SSR safe</li>
+          <li>TypeScript types</li>
+        </ul>
+      </div>
+
+      <div class="demo" aria-live="polite">
+        <h2>Try it: this page uses the hook</h2>
+        <p>Pick a theme, reload, or open a second tab. The button in the header is a second component on the same hook.</p>
+        <div id="demo-root">
+          <p class="loading">Loading demo…</p>
+        </div>
+      </div>
+    </div>
+
+    <div class="layout">
+      <nav class="toc" aria-label="On this page">
+        <p>On this page</p>
+        <ul>
+          <li><a href="#start">Quick start</a></li>
+          <li><a href="#fixes">What this fork fixes</a></li>
+          <li><a href="#migrate">Migrating</a></li>
+          <li><a href="#api">API</a></li>
+          <li><a href="#flash">SSR &amp; the flash</a></li>
+        </ul>
+      </nav>
+
+      <main>
+        <div class="callout" id="fork">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><circle cx="6" cy="5" r="2"/><circle cx="18" cy="5" r="2"/><circle cx="12" cy="19" r="2"/><path d="M6 7v2a3 3 0 0 0 3 3h6a3 3 0 0 0 3-3V7M12 12v5"/></svg>
+          <p>
+            <strong>A maintained fork of <a href="https://github.com/donavon/use-dark-mode"><code>use-dark-mode</code></a></strong>
+            by <a href="https://github.com/donavon">Donavon West</a>. The original still gets thousands of downloads a week,
+            but it hasn't been released since 2019, can't be installed on React 17+ without <code>--legacy-peer-deps</code>,
+            and breaks with server rendering. This fork fixes those problems and simplifies the API.
+            All credit for the original design goes to Donavon and its contributors.
+          </p>
+        </div>
+
+        <section id="start">
+          <h2>Quick start</h2>
+<pre data-lang="jsx"><code>import useDarkMode from 'use-dark-mode-v2';
+
+function ThemeToggle() {
+  const darkMode = useDarkMode();
+
+  return (
+    &lt;button onClick={darkMode.toggle}&gt;
+      {darkMode.isDarkModeEnabled ? '☀ Light' : '☾ Dark'}
+    &lt;/button&gt;
+  );
+}</code></pre>
+          <p>The hook adds a <code>dark-mode</code> or <code>light-mode</code> class to <code>&lt;body&gt;</code>. Style from there:</p>
+<pre data-lang="css"><code>body.light-mode { background: #fff;    color: #333; }
+body.dark-mode  { background: #1a1919; color: #999; }</code></pre>
+          <p>Prefer to handle it yourself (CSS variables, a theme provider…)? Pass an <a href="#api"><code>onChange</code></a> callback instead.
+            To avoid a flash of the wrong theme on load, add the <a href="#flash">no-flash script</a>.</p>
+        </section>
+
+        <section id="fixes">
+          <h2>What this fork fixes</h2>
+          <ul class="cards">
+            <li>
+              <h3>React 17, 18 and 19</h3>
+              <p>The original only allowed React 16, so npm refused to install it on newer versions.</p>
+              <p class="refs"><a href="https://github.com/donavon/use-dark-mode/pull/68">#68</a> · <a href="https://github.com/donavon/use-dark-mode/issues/70">#70</a> · <a href="https://github.com/donavon/use-dark-mode/issues/96">#96</a></p>
+            </li>
+            <li>
+              <h3>No hydration errors in Next.js</h3>
+              <p>The first render now matches the server, and the real value is applied right after hydration: no errors, no flash, no two-click toggle.</p>
+              <p class="refs"><a href="https://github.com/donavon/use-dark-mode/issues/83">#83</a> · <a href="https://github.com/donavon/use-dark-mode/issues/55">#55</a> · <a href="https://github.com/donavon/use-dark-mode/issues/66">#66</a> · <a href="https://github.com/donavon/use-dark-mode/issues/80">#80</a></p>
+            </li>
+            <li>
+              <h3>The user's choice is respected</h3>
+              <p>Nothing is saved until the user picks a mode, so visitors who never do keep following their OS theme. Once they pick, OS changes no longer override them.</p>
+              <p class="refs"><a href="https://github.com/donavon/use-dark-mode/issues/52">#52</a></p>
+            </li>
+            <li>
+              <h3>Works with Vite and modern bundlers</h3>
+              <p>The original used Node's <code>global</code>, which doesn't exist in browsers.</p>
+              <p class="refs"><a href="https://github.com/donavon/use-dark-mode/issues/91">#91</a></p>
+            </li>
+            <li>
+              <h3>No abandoned dependencies</h3>
+              <p><code>use-persisted-state</code> and <code>@use-it/event-listener</code> are replaced by built-in code. The only dependency is React's official <code>use-sync-external-store</code> shim.</p>
+            </li>
+            <li>
+              <h3>Doesn't crash without storage</h3>
+              <p>In Safari private mode, with a full quota or blocked cookies, the setting is kept in memory for the session instead. Uses the current media query API, with a fallback for Safari &lt; 14.</p>
+            </li>
+          </ul>
+        </section>
+
+        <section id="migrate">
+          <h2>Migrating from <code>use-dark-mode</code></h2>
+<pre data-lang="sh"><code>npm uninstall use-dark-mode
+npm i use-dark-mode-v2</code></pre>
+          <p>Then change your imports to <code>import useDarkMode from 'use-dark-mode-v2'</code> and update the call and what it returns:</p>
+          <div class="table-wrap">
+            <table>
+              <thead><tr><th><code>use-dark-mode</code></th><th><code>use-dark-mode-v2</code></th></tr></thead>
+              <tbody>
+                <tr><td><code>useDarkMode(initialState, config)</code></td><td><code>useDarkMode(config)</code></td></tr>
+                <tr><td><code>darkMode.value</code></td><td><code>darkMode.isDarkModeEnabled</code></td></tr>
+                <tr><td><code>darkMode.enable()</code></td><td><code>darkMode.set(true)</code></td></tr>
+                <tr><td><code>darkMode.disable()</code></td><td><code>darkMode.set(false)</code></td></tr>
+                <tr><td><code>darkMode.toggle()</code></td><td><code>darkMode.toggle()</code> (unchanged)</td></tr>
+              </tbody>
+            </table>
+          </div>
+          <p><code>initialState</code> was only used in browsers without an OS theme setting, so dropping it changes nothing for most apps.
+            If you meant it as "start dark", pass <code>{ defaultMode: 'dark' }</code>.</p>
+          <p>The other options and the default <code>storageKey</code> are unchanged, so your users keep their saved preference.
+            Two behaviours changed on purpose:</p>
+          <ul>
+            <li>The initial value is no longer written to storage on first render, only when the user picks a mode.</li>
+            <li>Once the user has picked a mode, changing the OS theme no longer overrides it. Call <code>reset()</code> to go back to the default mode.</li>
+          </ul>
+        </section>
+
+        <section id="api">
+          <h2>API</h2>
+<pre data-lang="js"><code>const { isDarkModeEnabled, toggle, set, reset } = useDarkMode(config);</code></pre>
+
+          <h3>How the value is chosen</h3>
+          <ol class="priority">
+            <li>The user's saved choice, if they've made one.</li>
+            <li>Otherwise <code>defaultMode</code>. With <code>'system'</code> (the default) that's the OS preference
+              (<code>prefers-color-scheme</code>), updated live. It's light while the OS preference is unknown, during server rendering and hydration.
+              With <code>'dark'</code> or <code>'light'</code>, the OS is ignored.</li>
+          </ol>
+
+          <h3>Returns</h3>
+          <div class="table-wrap">
+            <table>
+              <thead><tr><th>Property</th><th>Description</th></tr></thead>
+              <tbody>
+                <tr><td><code>isDarkModeEnabled</code></td><td><code>true</code> when dark mode is on.</td></tr>
+                <tr><td><code>toggle()</code></td><td>Flip the current mode and save it as the user's choice.</td></tr>
+                <tr><td><code>set(isDarkModeEnabled)</code></td><td>Turn dark mode on (<code>true</code>) or off (<code>false</code>) and save it as the user's choice. Use it for explicit Light / Dark buttons or to apply a preference stored on the user's account.</td></tr>
+                <tr><td><code>reset()</code></td><td>Forget the user's choice and go back to <code>defaultMode</code>. With the default <code>'system'</code>, that's the "System" option of a Light / Dark / System picker.</td></tr>
+              </tbody>
+            </table>
+          </div>
+          <p><code>toggle</code> and <code>reset</code> take no arguments, so you can pass them straight to <code>onClick</code>. Wrap <code>set</code>: <code>onClick={() =&gt; darkMode.set(true)}</code>.</p>
+
+          <h3>Config</h3>
+          <div class="table-wrap">
+            <table>
+              <thead><tr><th>Option</th><th>Default</th><th>Description</th></tr></thead>
+              <tbody>
+                <tr><td><code>defaultMode</code></td><td><code>'system'</code></td><td>The mode before the user picks one, and after <code>reset()</code>: <code>'system'</code> follows the OS, <code>'dark'</code> or <code>'light'</code> ignore it. Use <code>'dark'</code> for a site designed dark-first.</td></tr>
+                <tr><td><code>classNameDark</code></td><td><code>'dark-mode'</code></td><td>Class added in dark mode.</td></tr>
+                <tr><td><code>classNameLight</code></td><td><code>'light-mode'</code></td><td>Class added in light mode.</td></tr>
+                <tr><td><code>element</code></td><td><code>document.body</code></td><td>Element that receives the class.</td></tr>
+                <tr><td><code>onChange</code></td><td>—</td><td>Called with the new value (from a <code>useEffect</code>, so the DOM is safe to touch). When set, the class options above are ignored and nothing is added to the DOM: you're in full control.</td></tr>
+                <tr><td><code>storageKey</code></td><td><code>'darkMode'</code></td><td>Key the choice is saved under. Use your own (e.g. <code>'myapp-theme'</code>) if <code>darkMode</code> could clash with something else on your domain, which is easy on shared hosts like <code>*.github.io</code>. <code>null</code> disables saving.</td></tr>
+                <tr><td><code>storageProvider</code></td><td><code>localStorage</code></td><td>Any object with <code>getItem</code>/<code>setItem</code>/<code>removeItem</code>, e.g. <code>sessionStorage</code>.</td></tr>
+              </tbody>
+            </table>
+          </div>
+        </section>
+
+        <section id="flash">
+          <h2>Server rendering &amp; preventing the flash</h2>
+          <p>
+            React only runs after the page has loaded, so a saved dark-mode preference would otherwise show a flash of light mode first.
+            Add this tiny script as the <strong>first thing inside <code>&lt;body&gt;</code></strong> so the right class is there before the first paint.
+            If you changed <code>storageKey</code>, <code>defaultMode</code> or the class names, change them here too.
+          </p>
+<pre data-lang="html"><code>&lt;script&gt;
+(function () {
+  var storageKey = 'darkMode';
+  var classNameDark = 'dark-mode';
+  var classNameLight = 'light-mode';
+  var defaultMode = 'system'; // or 'dark' / 'light'
+  var dark;
+  try {
+    var stored = localStorage.getItem(storageKey);
+    if (stored !== null) dark = JSON.parse(stored);
+  } catch (e) {}
+  if (typeof dark !== 'boolean') {
+    dark = defaultMode === 'system'
+      ? !!(window.matchMedia &amp;&amp; window.matchMedia('(prefers-color-scheme: dark)').matches)
+      : defaultMode === 'dark';
+  }
+  document.body.classList.add(dark ? classNameDark : classNameLight);
+  document.body.classList.remove(dark ? classNameLight : classNameDark);
+})();
+&lt;/script&gt;</code></pre>
+          <p>It only reads storage, never writes it, so visitors who haven't picked a mode keep getting the default mode.</p>
+
+          <div class="tabs">
+            <div role="tablist" aria-label="Framework setup">
+              <button type="button" role="tab" id="tab-next-app" aria-controls="panel-next-app" aria-selected="true">
+                <span class="logos"><svg class="logo logo-next" viewBox="0 0 24 24" aria-hidden="true"><path d="M18.665 21.978C16.758 23.255 14.465 24 12 24 5.377 24 0 18.623 0 12S5.377 0 12 0s12 5.377 12 12c0 3.583-1.574 6.801-4.067 9.001L9.219 7.2H7.2v9.596h1.615V9.251l9.85 12.727Zm-3.332-8.533 1.6 2.061V7.2h-1.6v6.245Z"/></svg></span>
+                <span class="tab-name">Next.js</span>
+                <span class="tab-sub">App Router</span>
+              </button>
+              <button type="button" role="tab" id="tab-next-pages" aria-controls="panel-next-pages" aria-selected="false" tabindex="-1">
+                <span class="logos"><svg class="logo logo-next" viewBox="0 0 24 24" aria-hidden="true"><path d="M18.665 21.978C16.758 23.255 14.465 24 12 24 5.377 24 0 18.623 0 12S5.377 0 12 0s12 5.377 12 12c0 3.583-1.574 6.801-4.067 9.001L9.219 7.2H7.2v9.596h1.615V9.251l9.85 12.727Zm-3.332-8.533 1.6 2.061V7.2h-1.6v6.245Z"/></svg></span>
+                <span class="tab-name">Next.js</span>
+                <span class="tab-sub">Pages Router</span>
+              </button>
+              <button type="button" role="tab" id="tab-gatsby" aria-controls="panel-gatsby" aria-selected="false" tabindex="-1">
+                <span class="logos"><svg class="logo logo-gatsby" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 0C5.4 0 0 5.4 0 12s5.4 12 12 12 12-5.4 12-12S18.6 0 12 0zm0 2.571c3.171 0 5.915 1.543 7.629 3.858l-1.286 1.115C16.886 5.572 14.571 4.286 12 4.286c-3.343 0-6.171 2.143-7.286 5.143l9.857 9.857c2.486-.857 4.373-3 4.973-5.572h-4.115V12h6c0 4.457-3.172 8.228-7.372 9.17L2.83 9.944C3.772 5.743 7.543 2.57 12 2.57zm-9.429 9.6l9.344 9.258c-2.4-.086-4.801-.943-6.601-2.743-1.8-1.8-2.743-4.201-2.743-6.515z"/></svg></span>
+                <span class="tab-name">Gatsby</span>
+                <span class="tab-sub">gatsby-ssr.js</span>
+              </button>
+              <button type="button" role="tab" id="tab-vite" aria-controls="panel-vite" aria-selected="false" tabindex="-1">
+                <span class="logos"><svg class="logo logo-vite" viewBox="0 0 24 24" aria-hidden="true"><path d="M13.056 23.238a.57.57 0 0 1-1.02-.355v-5.202c0-.63-.512-1.143-1.144-1.143H5.148a.57.57 0 0 1-.464-.903l3.777-5.29c.54-.753 0-1.804-.93-1.804H.57a.574.574 0 0 1-.543-.746.6.6 0 0 1 .08-.157L5.008.78a.57.57 0 0 1 .467-.24h14.589a.57.57 0 0 1 .466.903l-3.778 5.29c-.54.755 0 1.806.93 1.806h5.745c.238 0 .424.138.513.322a.56.56 0 0 1-.063.603z"/></svg><svg class="logo logo-html" viewBox="0 0 24 24" aria-hidden="true"><path d="M1.5 0h21l-1.91 21.563L11.977 24l-8.564-2.438L1.5 0zm7.031 9.75l-.232-2.718 10.059.003.23-2.622L5.412 4.41l.698 8.01h9.126l-.326 3.426-2.91.804-2.955-.81-.188-2.11H6.248l.33 4.171L12 19.351l5.379-1.443.744-8.157H8.531z"/></svg></span>
+                <span class="tab-name">Vite</span>
+                <span class="tab-sub">or plain HTML</span>
+              </button>
+            </div>
+
+            <div role="tabpanel" id="panel-next-app" aria-labelledby="tab-next-app">
+              <h4>Next.js App Router</h4>
+              <p>Inline the script in your root layout. <code>suppressHydrationWarning</code> tells React the class on <code>&lt;body&gt;</code> was changed on purpose before hydration.</p>
+<pre data-lang="jsx"><code>// app/layout.js
+const noFlash = `/* the script above, without the &lt;script&gt; tags */`;
+
+export default function RootLayout({ children }) {
+  return (
+    &lt;html lang="en"&gt;
+      &lt;body suppressHydrationWarning&gt;
+        &lt;script dangerouslySetInnerHTML={{ __html: noFlash }} /&gt;
+        {children}
+      &lt;/body&gt;
+    &lt;/html&gt;
+  );
+}</code></pre>
+              <p>Components that call <code>useDarkMode</code> must be Client Components (<code>'use client'</code>).</p>
+            </div>
+
+            <div role="tabpanel" id="panel-next-pages" aria-labelledby="tab-next-pages" hidden>
+              <h4>Next.js Pages Router</h4>
+<pre data-lang="jsx"><code>// pages/_document.js
+import { Html, Head, Main, NextScript } from 'next/document';
+
+const noFlash = `/* the script above, without the &lt;script&gt; tags */`;
+
+export default function Document() {
+  return (
+    &lt;Html&gt;
+      &lt;Head /&gt;
+      &lt;body suppressHydrationWarning&gt;
+        &lt;script dangerouslySetInnerHTML={{ __html: noFlash }} /&gt;
+        &lt;Main /&gt;
+        &lt;NextScript /&gt;
+      &lt;/body&gt;
+    &lt;/Html&gt;
+  );
+}</code></pre>
+            </div>
+
+            <div role="tabpanel" id="panel-gatsby" aria-labelledby="tab-gatsby" hidden>
+              <h4>Gatsby</h4>
+              <p>Inject the script at the start of <code>&lt;body&gt;</code> from <code>gatsby-ssr.js</code>:</p>
+<pre data-lang="jsx"><code>// gatsby-ssr.js
+import * as React from 'react';
+
+const noFlash = `/* the script above, without the &lt;script&gt; tags */`;
+
+export const onRenderBody = ({ setPreBodyComponents }) =&gt; {
+  setPreBodyComponents([
+    &lt;script key="no-flash" dangerouslySetInnerHTML={{ __html: noFlash }} /&gt;,
+  ]);
+};</code></pre>
+              <p>Don't use <code>gatsby-plugin-use-dark-mode</code> with this package: it's archived, installs the original
+                <code>use-dark-mode</code>, and its script saves the OS theme as if the user had chosen it.</p>
+            </div>
+
+            <div role="tabpanel" id="panel-vite" aria-labelledby="tab-vite" hidden>
+              <h4>Vite, Create React App, plain HTML</h4>
+              <p>Paste the script right after <code>&lt;body&gt;</code> in your <code>index.html</code>:</p>
+<pre data-lang="html"><code>&lt;body&gt;
+  &lt;script&gt;/* the script above */&lt;/script&gt;
+  &lt;div id="root"&gt;&lt;/div&gt;
+  &lt;script type="module" src="/src/main.jsx"&gt;&lt;/script&gt;
+&lt;/body&gt;</code></pre>
+            </div>
+          </div>
+        </section>
+      </main>
+    </div>
+  </div>
+
+  <footer>
+    <div class="wrap">
+      <p>MIT licensed. Original work © <a href="https://github.com/donavon">Donavon West</a> and the
+        <a href="https://github.com/donavon/use-dark-mode#contributors">use-dark-mode contributors</a>.
+        Maintained fork by <a href="https://github.com/AnisTigrini">Anis Tigrini</a>.</p>
+    </div>
+  </footer>
+
+  <script>
+    // Copy buttons.
+    function copyText(btn, text) {
+      (navigator.clipboard ? navigator.clipboard.writeText(text) : Promise.reject())
+        .then(function () { btn.textContent = 'Copied'; })
+        .catch(function () { btn.textContent = 'Select & copy'; })
+        .finally(function () { setTimeout(function () { btn.textContent = 'Copy'; }, 1500); });
+    }
+    document.getElementById('copy-install').addEventListener('click', function () {
+      copyText(this, document.getElementById('install-cmd').textContent);
+    });
+
+    // Minimal syntax highlighting + a copy button on every code block.
+    var TOKENS = /(\/\/[^\n]*|\/\*[\s\S]*?\*\/)|('(?:\\.|[^'\\\n])*'|"(?:\\.|[^"\\\n])*"|`(?:\\.|[^`\\])*`)|(<\/?[A-Za-z][\w.]*)|\b(import|from|export|default|const|let|var|function|return|if|try|catch|typeof|true|false|null)\b/g;
+    function escapeHtml(s) {
+      return s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+    }
+    function highlight(src) {
+      var out = '';
+      var last = 0;
+      src.replace(TOKENS, function (match, com, str, tag, kw, index) {
+        var cls = com ? 'com' : str ? 'str' : tag ? 'tag' : 'kw';
+        out += escapeHtml(src.slice(last, index)) + '<span class="tok-' + cls + '">' + escapeHtml(match) + '</span>';
+        last = index + match.length;
+        return match;
+      });
+      return out + escapeHtml(src.slice(last));
+    }
+    document.querySelectorAll('pre').forEach(function (pre) {
+      var code = pre.querySelector('code');
+      var lang = pre.getAttribute('data-lang');
+      if (lang === 'js' || lang === 'jsx' || lang === 'html') code.innerHTML = highlight(code.textContent);
+
+      var wrapper = document.createElement('div');
+      wrapper.className = 'code';
+      pre.parentNode.insertBefore(wrapper, pre);
+      wrapper.appendChild(pre);
+      var btn = document.createElement('button');
+      btn.type = 'button';
+      btn.className = 'copy';
+      btn.textContent = 'Copy';
+      btn.addEventListener('click', function () { copyText(btn, code.textContent); });
+      wrapper.appendChild(btn);
+    });
+
+    // Tabs (arrow keys move between them).
+    document.querySelectorAll('.tabs').forEach(function (tabs) {
+      var buttons = Array.prototype.slice.call(tabs.querySelectorAll('[role="tab"]'));
+      function select(btn) {
+        buttons.forEach(function (b) {
+          var selected = b === btn;
+          b.setAttribute('aria-selected', String(selected));
+          b.tabIndex = selected ? 0 : -1;
+          document.getElementById(b.getAttribute('aria-controls')).hidden = !selected;
+        });
+      }
+      buttons.forEach(function (btn, i) {
+        btn.addEventListener('click', function () { select(btn); });
+        btn.addEventListener('keydown', function (e) {
+          var next = e.key === 'ArrowRight' ? i + 1 : e.key === 'ArrowLeft' ? i - 1 : null;
+          if (next === null) return;
+          var target = buttons[(next + buttons.length) % buttons.length];
+          select(target);
+          target.focus();
+        });
+      });
+      tabs.classList.add('ready');
+    });
+
+    // Highlight the current section in the table of contents.
+    if ('IntersectionObserver' in window) {
+      var links = {};
+      document.querySelectorAll('.toc a').forEach(function (a) { links[a.getAttribute('href').slice(1)] = a; });
+      var observer = new IntersectionObserver(function (entries) {
+        entries.forEach(function (entry) {
+          if (!entry.isIntersecting) return;
+          Object.keys(links).forEach(function (id) { links[id].removeAttribute('aria-current'); });
+          links[entry.target.id].setAttribute('aria-current', 'true');
+        });
+      }, { rootMargin: '-20% 0px -70% 0px' });
+      Object.keys(links).forEach(function (id) { observer.observe(document.getElementById(id)); });
+    }
+  </script>
+
+  <!-- The live demo: the real package, loaded from npm through esm.sh. -->
+  <script type="importmap">
+    {
+      "imports": {
+        "react": "https://esm.sh/react@19.2.0",
+        "react-dom/client": "https://esm.sh/react-dom@19.2.0/client?external=react",
+        "use-dark-mode-v2": "https://esm.sh/use-dark-mode-v2@1?external=react"
+      }
+    }
+  </script>
+  <script type="module">
+    const demoRoot = document.getElementById('demo-root');
+    const STORAGE_KEY = 'use-dark-mode-v2-docs';
+    const OPTIONS = { storageKey: STORAGE_KEY };
+
+    try {
+      const [{ createElement: h }, { createRoot }, { default: useDarkMode }] = await Promise.all([
+        import('react'),
+        import('react-dom/client'),
+        import('use-dark-mode-v2'),
+      ]);
+
+      const icon = (...paths) => h('svg', {
+        width: 16, height: 16, viewBox: '0 0 24 24', fill: 'none', stroke: 'currentColor',
+        strokeWidth: 2, strokeLinecap: 'round', strokeLinejoin: 'round', 'aria-hidden': true,
+      }, ...paths);
+      const sun = () => icon(
+        h('circle', { key: 'c', cx: 12, cy: 12, r: 4 }),
+        h('path', { key: 'p', d: 'M12 2v2M12 20v2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M2 12h2M20 12h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4' }),
+      );
+      const moon = () => icon(h('path', { d: 'M21 12.8A9 9 0 1 1 11.2 3 7 7 0 0 0 21 12.8z' }));
+      const monitor = () => icon(
+        h('rect', { key: 'r', x: 3, y: 4, width: 18, height: 12, rx: 2 }),
+        h('path', { key: 'p', d: 'M8 20h8M12 16v4' }),
+      );
+
+      // What's in storage right now. The hook re-renders this component whenever it changes.
+      const readSaved = () => {
+        try { return localStorage.getItem(STORAGE_KEY); } catch (e) { return null; }
+      };
+
+      function HeaderToggle() {
+        const { isDarkModeEnabled, toggle } = useDarkMode(OPTIONS);
+        const label = isDarkModeEnabled ? 'Switch to light mode' : 'Switch to dark mode';
+        return h('button', { type: 'button', className: 'icon-btn', onClick: toggle, 'aria-label': label, title: label },
+          isDarkModeEnabled ? sun() : moon());
+      }
+
+      function Demo() {
+        const { isDarkModeEnabled, set, reset } = useDarkMode(OPTIONS);
+        const saved = readSaved();
+        const mode = saved === null ? 'system' : saved === 'true' ? 'dark' : 'light';
+        const choices = [
+          ['light', 'Light', sun, () => set(false)],
+          ['dark', 'Dark', moon, () => set(true)],
+          ['system', 'System', monitor, reset],
+        ];
+
+        return h('div', null,
+          h('div', { className: 'segmented', role: 'group', 'aria-label': 'Theme' },
+            choices.map(([id, label, glyph, onClick]) => h('button', {
+              key: id, type: 'button', 'aria-pressed': mode === id, onClick,
+            }, glyph(), label)),
+          ),
+          h('dl', { className: 'readout' },
+            h('div', null,
+              h('dt', null, 'isDarkModeEnabled'),
+              h('dd', null, h('code', null, String(isDarkModeEnabled)))),
+            h('div', null,
+              h('dt', null, 'Saved choice'),
+              h('dd', null, saved === null ? 'none: following your OS' : h('code', null, saved))),
+          ),
+          h('p', { className: 'hint' },
+            'Light and Dark call ', h('code', null, 'set()'), ', System calls ', h('code', null, 'reset()'), '.'),
+        );
+      }
+
+      demoRoot.textContent = '';
+      createRoot(demoRoot).render(h(Demo));
+      createRoot(document.getElementById('theme-toggle')).render(h(HeaderToggle));
+    } catch (error) {
+      console.error(error);
+      demoRoot.innerHTML = '<p class="loading">The live demo couldn’t load (it needs the package on npm and a network connection). The rest of this page works without it.</p>';
+    }
+  </script>
+</body>
+</html>

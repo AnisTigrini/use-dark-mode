@@ -6,5 +6,5 @@ src
 __tests__
 coverage
 .prettierrc
-.travis.yml
 .all-contributorsrc
+docs
