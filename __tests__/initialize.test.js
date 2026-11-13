@@ -1,7 +1,6 @@
-import { useState } from 'react';
 import 'jest-dom/extend-expect';
 
-import initialize from '../src/initialize';
+import initialize, { useMemoryState } from '../src/initialize';
 
 const noop = () => {};
 
@@ -34,37 +33,21 @@ const mockedWindowNotSupported = {
   }),
 };
 
-const testSuite = (g = global, { getInitialValue, getDefaultOnChange, mediaQueryEventTarget }) => {
-  const global = g;
+const testSuite = (g, { getSystemSnapshot, getDefaultOnChange, subscribeToSystem }) => {
+  const mql = g && g.matchMedia ? g.matchMedia('(prefers-color-scheme: dark)') : null;
+  const isColorSchemeQuerySupported = !!mql && mql.media === '(prefers-color-scheme: dark)';
 
-  describe('getInitialValue', () => {
-    test('import { getInitialValue } from "./utils"', () => {
-      expect(typeof getInitialValue).toBe('function');
-    });
-    test('is passed an initial value and returns that same value if isColorSchemeQuerySupported', () => {
-      const mql = global.matchMedia
-        ? global.matchMedia('(prefers-color-scheme: dark)')
-        : {};
-      const isColorSchemeQuerySupported = mql.media === '(prefers-color-scheme: dark)';
-
-      // const isColorSchemeQuerySupported = !!global.matchMedia;
-
-      if (isColorSchemeQuerySupported) {
-        expect(getInitialValue('foo')).toBe(true);
-      } else {
-        expect(getInitialValue('foo')).toBe('foo');
-      }
+  describe('getSystemSnapshot', () => {
+    test('returns the OS preference, or `undefined` when it is unknown', () => {
+      expect(getSystemSnapshot()).toBe(isColorSchemeQuerySupported ? mql.matches : undefined);
     });
   });
 
-  describe('mediaQueryEventTarget', () => {
-    test('is an object that supports an addEventListener method', () => {
-      expect(typeof mediaQueryEventTarget.addEventListener).toBe('function');
-      expect(mediaQueryEventTarget.addEventListener()).toBeUndefined();
-    });
-    test('is an object that supports an removeEventListener method', () => {
-      expect(typeof mediaQueryEventTarget.removeEventListener).toBe('function');
-      expect(mediaQueryEventTarget.removeEventListener()).toBeUndefined();
+  describe('subscribeToSystem', () => {
+    test('returns an unsubscribe function', () => {
+      const unsubscribe = subscribeToSystem(noop);
+      expect(typeof unsubscribe).toBe('function');
+      expect(unsubscribe()).toBeUndefined();
     });
   });
 
@@ -111,12 +94,12 @@ const testSuite = (g = global, { getInitialValue, getDefaultOnChange, mediaQuery
 describe('calling initialize', () => {
   test('with key)', () => {
     const { usePersistedDarkModeState } = initialize('key');
-    expect(usePersistedDarkModeState).not.toBe(useState);
+    expect(usePersistedDarkModeState).not.toBe(useMemoryState);
   });
 
   test('without key)', () => {
     const { usePersistedDarkModeState } = initialize();
-    expect(usePersistedDarkModeState).toBe(useState);
+    expect(usePersistedDarkModeState).toBe(useMemoryState);
   });
 });
 

@@ -1,5 +1,5 @@
-import { useState } from 'react';
-import createPersistedState from 'use-persisted-state';
+import { useState, useCallback } from 'react';
+import createPersistedState from './createPersistedState';
 
 const noop = () => {};
 
@@ -12,23 +12,45 @@ const mockElement = {
 
 const preferDarkQuery = '(prefers-color-scheme: dark)';
 
-const initialize = (storageKey, storageProvider, glbl = global) => {
+export const useMemoryState = (fallback) => {
+  const [override, setOverride] = useState(undefined);
+  const value = override === undefined ? fallback : override;
+
+  const setValue = useCallback((next) => {
+    setOverride((current) => {
+      const base = current === undefined ? fallback : current;
+      return typeof next === 'function' ? next(base) : next;
+    });
+  }, [fallback]);
+
+  const reset = useCallback(() => setOverride(undefined), []);
+
+  return [value, setValue, reset];
+};
+
+const initialize = (storageKey, storageProvider, glbl = globalThis) => {
   const usePersistedDarkModeState = storageKey
-    ? createPersistedState(storageKey, storageProvider)
-    : useState;
+    ? createPersistedState(storageKey, storageProvider, glbl)
+    : useMemoryState;
 
-  const mql = glbl.matchMedia ? glbl.matchMedia(preferDarkQuery) : {};
+  const mql = glbl.matchMedia ? glbl.matchMedia(preferDarkQuery) : null;
+  const isColorSchemeQuerySupported = !!mql && mql.media === preferDarkQuery;
 
-  const mediaQueryEventTarget = {
-    addEventListener: (_, handler) => mql.addListener && mql.addListener(handler),
-    removeEventListener: (_, handler) => mql.removeListener && mql.removeListener(handler),
+  // OS preference.
+  const getSystemSnapshot = () => (isColorSchemeQuerySupported ? mql.matches : undefined);
+
+  const subscribeToSystem = (onChange) => {
+    if (!isColorSchemeQuerySupported) return noop;
+
+    if (mql.addEventListener) {
+      mql.addEventListener('change', onChange);
+      return () => mql.removeEventListener('change', onChange);
+    }
+
+    // These APIs are deprecated (for old browsers like Safari 14).
+    mql.addListener(onChange);
+    return () => mql.removeListener(onChange);
   };
-
-  const isColorSchemeQuerySupported = mql.media === preferDarkQuery;
-
-  const getInitialValue = usersInitialState => (
-    isColorSchemeQuerySupported ? mql.matches : usersInitialState
-  );
 
   // Mock element if SSR else real body element.
   const defaultElement = (glbl.document && glbl.document.body) || mockElement;
@@ -45,8 +67,8 @@ const initialize = (storageKey, storageProvider, glbl = global) => {
   return {
     usePersistedDarkModeState,
     getDefaultOnChange,
-    mediaQueryEventTarget,
-    getInitialValue,
+    getSystemSnapshot,
+    subscribeToSystem,
   };
 };
 

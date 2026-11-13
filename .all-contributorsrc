@@ -1,6 +1,6 @@
 {
   "projectName": "use-dark-mode",
-  "projectOwner": "donavon",
+  "projectOwner": "AnisTigrini",
   "repoType": "github",
   "repoHost": "https://github.com",
   "files": [
@@ -9,6 +9,16 @@
   "imageSize": 100,
   "commit": false,
   "contributors": [
+    {
+      "login": "AnisTigrini",
+      "name": "Anis Tigrini",
+      "avatar_url": "https://avatars.githubusercontent.com/u/80918772",
+      "profile": "https://anistigrini.github.io/portfolio/",
+      "contributions": [
+        "code",
+        "migration"
+      ]
+    },
     {
       "login": "donavon",
       "name": "Donavon West",

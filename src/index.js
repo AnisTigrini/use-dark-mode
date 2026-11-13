@@ -1,31 +1,35 @@
 import { useEffect, useCallback, useMemo } from 'react';
-import useEventListener from '@use-it/event-listener';
+import { useSyncExternalStore } from 'use-sync-external-store/shim';
 
 import initialize from './initialize';
+import { getServerSnapshot } from './createPersistedState';
 
-const useDarkMode = (
-  initialValue = false,
-  {
-    element,
-    classNameDark,
-    classNameLight,
-    onChange,
-    storageKey = 'darkMode',
-    storageProvider,
-    global,
-  } = {}
-) => {
+const useDarkMode = ({
+  defaultMode = 'system',
+  element,
+  classNameDark,
+  classNameLight,
+  onChange,
+  storageKey = 'darkMode',
+  storageProvider,
+  global,
+} = {}) => {
   const {
     usePersistedDarkModeState,
     getDefaultOnChange,
-    getInitialValue,
-    mediaQueryEventTarget,
+    getSystemSnapshot,
+    subscribeToSystem,
   } = useMemo(
     () => initialize(storageKey, storageProvider, global),
     [storageKey, storageProvider, global]
   );
 
-  const [state, setState] = usePersistedDarkModeState(getInitialValue(initialValue));
+  const systemValue = useSyncExternalStore(subscribeToSystem, getSystemSnapshot, getServerSnapshot);
+
+  const fallback = defaultMode === 'system' ? systemValue === true : defaultMode === 'dark';
+
+  // The user's saved choice wins over the fallback.
+  const [state, setState, reset] = usePersistedDarkModeState(fallback);
 
   const stateChangeCallback = useMemo(
     () => onChange || getDefaultOnChange(element, classNameDark, classNameLight),
@@ -37,18 +41,11 @@ const useDarkMode = (
     stateChangeCallback(state);
   }, [stateChangeCallback, state]);
 
-  // Listen for media changes and set state.
-  useEventListener(
-    'change',
-    ({ matches }) => setState(matches),
-    mediaQueryEventTarget
-  );
-
   return {
-    value: state,
-    enable: useCallback(() => setState(true), [setState]),
-    disable: useCallback(() => setState(false), [setState]),
+    isDarkModeEnabled: state,
+    set: useCallback(value => setState(value), [setState]),
     toggle: useCallback(() => setState(current => !current), [setState]),
+    reset,
   };
 };
 
